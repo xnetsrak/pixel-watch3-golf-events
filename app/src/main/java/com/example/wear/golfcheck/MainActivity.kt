@@ -46,16 +46,16 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
-
+import androidx.lifecycle.lifecycleScope
 
 class MainActivity : ComponentActivity() {
 
     private lateinit var exerciseClient: ExerciseClient
     private val tag = "GolfCheckApp"
 
-    // We need a state to update the UI from our callback
+    // Shared observable state for tracking status that both Activity logic and Composables read/write
     private val statusTextState = mutableStateOf("Initializing...")
-    private var isTracking = false
+    private val isTrackingState = mutableStateOf(false)
 
     // Our callback to listen for exercise updates (and golf shots!)
     private val exerciseCallback = object : ExerciseUpdateCallback {
@@ -95,13 +95,30 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        // Use lifecycleScope to ensure we use the latest isTrackingState value and do cleanup
+        if (isTrackingState.value) {
+            lifecycleScope.launch {
+                try {
+                    exerciseClient.endExerciseAsync().await()
+                    exerciseClient.clearUpdateCallbackAsync(exerciseCallback).await()
+                    Log.i(tag, "Stopped exercise in onDestroy.")
+                } catch (e: Exception) {
+                    Log.w(tag, "Error stopping exercise in onDestroy: ${e.message}")
+                }
+            }
+        }
+    }
+
     @Composable
     fun GolfTestScreen(
         client: ExerciseClient,
         status: MutableState<String>
     ) {
         val context = LocalContext.current
-        var isTracking by remember { mutableStateOf(this.isTracking) }
+        // Use the single shared MutableState so composable and Activity logic are consistent
+        var isTracking by isTrackingState
         val coroutineScope = rememberCoroutineScope()
 
         // Check permissions
@@ -182,34 +199,31 @@ class MainActivity : ComponentActivity() {
                                 status.value = "Starting golf session...\nSwing the club!"
                                 isTracking = true
 
-                                // Query supported data types for GOLF exercise
-                                val capabilities = client.getCapabilitiesAsync().await()
-                                val supportedDataTypes = capabilities.getSupportedDataTypes(ExerciseType.GOLF)
-
-                                // Prefer HEART_RATE_BPM if available, otherwise use any available data type
-                                val dataTypesToRequest = when {
-                                    DataType.HEART_RATE_BPM in supportedDataTypes -> setOf(DataType.HEART_RATE_BPM)
-                                    supportedDataTypes.isNotEmpty() -> setOf(supportedDataTypes.first())
-                                    else -> emptySet()
-                                }
-
-                                if (dataTypesToRequest.isEmpty()) {
-                                    status.value = "No supported data types available for golf session."
-                                    isTracking = false
-                                    return@launch
-                                }
-
-                                // Configure the exercise to listen for golf shots
-                                val config = ExerciseConfig.builder(ExerciseType.GOLF)
-                                    .setDataTypes(dataTypesToRequest) // Must have at least one data type
-                                    .setExerciseEvents(setOf(ExerciseEvent.GOLF_SHOT)) // The important part!
-                                    .build()
-
+                                // Query supported data types for GOLF exercise and choose a safe fallback
                                 try {
-                                    // Register our callback
-                                    client.setUpdateCallback(exerciseCallback)
-                                    // Start the exercise
+                                    val capabilities = client.getCapabilitiesAsync().await()
+                                    val supportedDataTypes = capabilities.getSupportedDataTypes(ExerciseType.GOLF)
+
+                                    val dataTypesToRequest = when {
+                                        DataType.HEART_RATE_BPM in supportedDataTypes -> setOf(DataType.HEART_RATE_BPM)
+                                        supportedDataTypes.isNotEmpty() -> setOf(supportedDataTypes.first())
+                                        else -> emptySet()
+                                    }
+
+                                    if (dataTypesToRequest.isEmpty()) {
+                                        status.value = "No supported data types available for golf session."
+                                        isTracking = false
+                                        return@launch
+                                    }
+
+                                    // Configure the exercise to listen for golf shots with valid data types
+                                    val config = ExerciseConfig.builder(ExerciseType.GOLF)
+                                        .setDataTypes(dataTypesToRequest) // at least one data type guaranteed above
+                                        .build()
+
+                                    client.setUpdateCallbackAsync(exerciseCallback).await()
                                     client.startExerciseAsync(config).await()
+                                    status.value = "Golf session started. Waiting for shots..."
                                 } catch (e: Exception) {
                                     status.value = "Error starting: ${e.message}"
                                     isTracking = false
@@ -217,25 +231,9 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
-                },
-                enabled = status.value.contains("AVAILABLE") || isTracking
-            ) {
-                Text(if (isTracking) "Stop Session" else "Start Golf Session")
-            }
-        }
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        if (isTracking) {
-            // Clean up if the app is closed while tracking
-            CoroutineScope(Dispatchers.Main).launch {
-                try {
-                    exerciseClient.endExerciseAsync().await()
-                    exerciseClient.clearUpdateCallbackAsync(exerciseCallback).await()
-                } catch (e: Exception) {
-                    Log.e(tag, "Error cleaning up in onDestroy", e)
                 }
+            ) {
+                Text(if (isTracking) "Stop" else "Start")
             }
         }
     }
