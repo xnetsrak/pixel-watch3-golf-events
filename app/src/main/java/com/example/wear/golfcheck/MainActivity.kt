@@ -182,9 +182,26 @@ class MainActivity : ComponentActivity() {
                                 status.value = "Starting golf session...\nSwing the club!"
                                 isTracking = true
 
+                                // Query supported data types for GOLF exercise
+                                val capabilities = client.getCapabilitiesAsync().await()
+                                val supportedDataTypes = capabilities.getSupportedDataTypes(ExerciseType.GOLF)
+
+                                // Prefer HEART_RATE_BPM if available, otherwise use any available data type
+                                val dataTypesToRequest = when {
+                                    DataType.HEART_RATE_BPM in supportedDataTypes -> setOf(DataType.HEART_RATE_BPM)
+                                    supportedDataTypes.isNotEmpty() -> setOf(supportedDataTypes.first())
+                                    else -> emptySet()
+                                }
+
+                                if (dataTypesToRequest.isEmpty()) {
+                                    status.value = "No supported data types available for golf session."
+                                    isTracking = false
+                                    return@launch
+                                }
+
                                 // Configure the exercise to listen for golf shots
                                 val config = ExerciseConfig.builder(ExerciseType.GOLF)
-                                    .setDataTypes(setOf(DataType.HEART_RATE_BPM)) // Must have at least one data type
+                                    .setDataTypes(dataTypesToRequest) // Must have at least one data type
                                     .setExerciseEvents(setOf(ExerciseEvent.GOLF_SHOT)) // The important part!
                                     .build()
 
