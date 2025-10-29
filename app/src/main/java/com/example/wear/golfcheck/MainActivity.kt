@@ -140,7 +140,6 @@ class MainActivity : ComponentActivity() {
             try {
                 val capabilities = client.getCapabilitiesAsync().await()
                 val golfSupported = capabilities.supportedExerciseTypes.contains(ExerciseType.GOLF)
-                //val golfShotEventSupported = if (golfSupported) capabilities.getExerciseTypeCapabilities(ExerciseType.GOLF).supportedExerciseEvents.contains(ExerciseEventType.GOLF_SHOT_EVENT) else false
 
                 val golfShotEventSupported = golfSupported &&
                     capabilities.getExerciseTypeCapabilities(ExerciseType.GOLF)
