@@ -153,9 +153,19 @@ class MainActivity : ComponentActivity() {
                     Log.i(tag, "Exercise Type: $exerciseType supports events: $eventTypes")
                 }*/
 
-                val golfShotEventSupported = golfSupported && capabilities.getExerciseTypeCapabilities(ExerciseType.GOLF).supportedExerciseEvents.contains(ExerciseEventType.GOLF_SHOT_EVENT)
+                //val golfShotEventSupported = golfSupported && capabilities.getExerciseTypeCapabilities(ExerciseType.GOLF).supportedExerciseEvents.contains(ExerciseEventType.GOLF_SHOT_EVENT)
 
-                if (golfSupported && golfShotEventSupported) {
+                val golfCapabilities = capabilities.typeToCapabilities[ExerciseType.GOLF]
+                val golfShotEventSupported =
+                    golfCapabilities
+                        ?.supportedExerciseEvents
+                        ?.contains(ExerciseEventType.GOLF_SHOT_EVENT)
+                val golfSwingTypeClassificationSupported =
+                    golfCapabilities
+                        ?.getExerciseEventCapabilityDetails(ExerciseEventType.GOLF_SHOT_EVENT)
+                        ?.isSwingTypeClassificationSupported ?: false
+
+                if (golfSupported && golfShotEventSupported == true) {
                     status.value = """
                         Golf API: AVAILABLE
                         Ready to start.
@@ -166,6 +176,7 @@ class MainActivity : ComponentActivity() {
                         Golf API: NOT AVAILABLE
                         Golf: $golfSupported
                         GolfShotEvent: $golfShotEventSupported
+                        Swing: $golfSwingTypeClassificationSupported
                     """.trimIndent()
                     Log.w(tag, "GolfShotEvent is NOT supported.")
                 }
