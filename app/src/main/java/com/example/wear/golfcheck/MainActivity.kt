@@ -39,6 +39,7 @@ import androidx.health.services.client.data.ExerciseEvent
 import androidx.health.services.client.data.ExerciseEventType
 import androidx.health.services.client.data.ExerciseType
 import androidx.health.services.client.data.GolfShotEvent
+import androidx.health.services.client.data.WarmUpConfig
 import androidx.lifecycle.lifecycleScope
 import androidx.wear.compose.material.Button
 import androidx.wear.compose.material.MaterialTheme
@@ -118,39 +119,54 @@ class MainActivity : ComponentActivity() {
         var isTracking by isTrackingState
         val coroutineScope = rememberCoroutineScope()
 
-        var hasPermission by remember {
-            mutableStateOf(
-                ContextCompat.checkSelfPermission(
-                    context,
-                    Manifest.permission.ACTIVITY_RECOGNITION
-                ) == PackageManager.PERMISSION_GRANTED
-            )
+        val permissions = arrayOf(
+            Manifest.permission.ACTIVITY_RECOGNITION,
+            Manifest.permission.BODY_SENSORS,
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+        )
+
+        var hasPermissions by remember {
+            mutableStateOf(permissions.all { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED })
         }
+
         val permissionLauncher = rememberLauncherForActivityResult(
-            ActivityResultContracts.RequestPermission()
-        ) { isGranted ->
-            hasPermission = isGranted
-            if (!isGranted) {
-                status.value = "Permission denied."
+            ActivityResultContracts.RequestMultiplePermissions()
+        ) { permissionsMap ->
+            hasPermissions = permissionsMap.values.all { it }
+            if (!hasPermissions) {
+                status.value = "Permissions denied."
             }
         }
 
         LaunchedEffect(key1 = Unit) {
             status.value = "Checking features..."
             try {
+
                 val capabilities = client.getCapabilitiesAsync().await()
                 val golfSupported = capabilities.supportedExerciseTypes.contains(ExerciseType.GOLF)
 
-                val golfShotEventSupported = golfSupported &&
-                    capabilities.getExerciseTypeCapabilities(ExerciseType.GOLF)
-                        ?.supportedExerciseEvents
-                        ?.contains(ExerciseEventType.GOLF_SHOT_EVENT) == true
+                /*val allExerciseTypes = capabilities.supportedExerciseTypes
+                // log alle supported exercise event types
+                for (exerciseType in allExerciseTypes) {
+                    val eventTypes = capabilities.getExerciseTypeCapabilities(exerciseType).supportedExerciseEvents
+                    Log.i(tag, "Exercise Type: $exerciseType supports events: $eventTypes")
+                }*/
+
+                val golfShotEventSupported = golfSupported && capabilities.getExerciseTypeCapabilities(ExerciseType.GOLF).supportedExerciseEvents.contains(ExerciseEventType.GOLF_SHOT_EVENT)
 
                 if (golfSupported && golfShotEventSupported) {
-                    status.value = "Golf API: AVAILABLE\nReady to start."
+                    status.value = """
+                        Golf API: AVAILABLE
+                        Ready to start.
+                    """.trimIndent()
                     Log.i(tag, "GolfShotEvent is supported on this watch.")
                 } else {
-                    status.value = "Golf API: NOT AVAILABLE\nGolf: $golfSupported\nGolfShotEvent: $golfShotEventSupported"
+                    status.value = """
+                        Golf API: NOT AVAILABLE
+                        Golf: $golfSupported
+                        GolfShotEvent: $golfShotEventSupported
+                    """.trimIndent()
                     Log.w(tag, "GolfShotEvent is NOT supported.")
                 }
             } catch (e: Exception) {
@@ -186,12 +202,15 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     } else {
-                        if (!hasPermission) {
-                            status.value = "Requesting permission..."
-                            permissionLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION)
+                        if (!hasPermissions) {
+                            status.value = "Requesting permissions..."
+                            permissionLauncher.launch(permissions)
                         } else {
                             coroutineScope.launch {
-                                status.value = "Starting golf session...\nSwing the club!"
+                                status.value = """
+                                    Starting golf session...
+                                    Swing the club!
+                                """.trimIndent()
                                 isTracking = true
 
                                 try {
@@ -201,26 +220,26 @@ class MainActivity : ComponentActivity() {
                                         isTracking = false
                                         return@launch
                                     }
-                                    val supportedDataTypes = capabilities.getExerciseTypeCapabilities(ExerciseType.GOLF).supportedDataTypes
 
-                                    val dataTypesToRequest = when {
-                                        DataType.HEART_RATE_BPM in supportedDataTypes -> setOf(DataType.HEART_RATE_BPM)
-                                        supportedDataTypes.isNotEmpty() -> setOf(supportedDataTypes.first())
-                                        else -> emptySet()
-                                    }
+                                    val dataTypes = setOf(DataType.LOCATION)
+                                    val exerciseEvents = setOf(ExerciseEventType.GOLF_SHOT_EVENT)
 
-                                    if (dataTypesToRequest.isEmpty()) {
-                                        status.value = "No supported data types available for golf session."
-                                        isTracking = false
-                                        return@launch
-                                    }
+                                    val warmUpConfig = WarmUpConfig(
+                                        exerciseType = ExerciseType.GOLF,
+                                        dataTypes = dataTypes
+                                    )
 
-                                    val config = ExerciseConfig.builder(ExerciseType.GOLF)
-                                        .setDataTypes(dataTypesToRequest)
-                                        .build()
+                                    val exerciseConfig = ExerciseConfig(
+                                        exerciseType = ExerciseType.GOLF,
+                                        dataTypes = dataTypes,
+                                        isAutoPauseAndResumeEnabled = false,
+                                        isGpsEnabled = true,
+                                        exerciseEventTypes = exerciseEvents
+                                    )
 
                                     client.setUpdateCallback(exerciseCallback)
-                                    client.startExerciseAsync(config).await()
+                                    client.prepareExerciseAsync(warmUpConfig).await()
+                                    client.startExerciseAsync(exerciseConfig).await()
                                     status.value = "Golf session started. Waiting for shots..."
                                 } catch (e: Exception) {
                                     status.value = "Error starting: ${e.message}"

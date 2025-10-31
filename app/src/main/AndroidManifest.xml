@@ -3,9 +3,13 @@
     package="com.example.wear.golfcheck">
 
     <uses-feature android:name="android.hardware.type.watch" />
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
 
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
     <uses-permission android:name="android.permission.BODY_SENSORS" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
 
     <!-- Moved queries out of <application> so it's a direct child of <manifest> -->
     <queries>
