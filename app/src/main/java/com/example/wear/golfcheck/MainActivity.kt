@@ -25,7 +25,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -37,47 +36,50 @@ import androidx.health.services.client.data.Availability
 import androidx.health.services.client.data.DataType
 import androidx.health.services.client.data.ExerciseConfig
 import androidx.health.services.client.data.ExerciseEvent
+import androidx.health.services.client.data.ExerciseEventType
 import androidx.health.services.client.data.ExerciseType
 import androidx.health.services.client.data.GolfShotEvent
+import androidx.health.services.client.data.WarmUpConfig
+import androidx.lifecycle.lifecycleScope
 import androidx.wear.compose.material.Button
 import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Text
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.guava.await
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
-import androidx.lifecycle.lifecycleScope
 
 class MainActivity : ComponentActivity() {
 
     private lateinit var exerciseClient: ExerciseClient
     private val tag = "GolfCheckApp"
 
-    // Shared observable state for tracking status that both Activity logic and Composables read/write
     private val statusTextState = mutableStateOf("Initializing...")
     private val isTrackingState = mutableStateOf(false)
 
-    // Our callback to listen for exercise updates (and golf shots!)
     private val exerciseCallback = object : ExerciseUpdateCallback {
-        override fun onAvailabilityChanged(dataType: DataType, availability: Availability) {
+        override fun onRegistered() {
+            Log.d(tag, "Callback registered")
+        }
+
+        override fun onRegistrationFailed(throwable: Throwable) {
+            Log.e(tag, "Callback registration failed", throwable)
+        }
+
+        override fun onAvailabilityChanged(dataType: DataType<*, *>, availability: Availability) {
             Log.d(tag, "Availability changed for $dataType: $availability")
         }
 
         override fun onExerciseUpdateReceived(update: androidx.health.services.client.data.ExerciseUpdate) {
-            // We receive continuous updates here (e.g. heart rate, time)
         }
 
         override fun onLapSummaryReceived(lapSummary: androidx.health.services.client.data.ExerciseLapSummary) {
-            // Not relevant for golf
         }
 
         override fun onExerciseEventReceived(event: ExerciseEvent) {
-            // THIS IS THE IMPORTANT PART!
             if (event is GolfShotEvent) {
-                val swingType = event.swingType.name
+                val swingType = event.swingType.toString()
                 Log.i(tag, "GOLF SHOT REGISTERED! Type: $swingType")
-
-                // Update the UI text. Must happen on the Main thread.
                 CoroutineScope(Dispatchers.Main).launch {
                     statusTextState.value = "GOLF SHOT! ($swingType)"
                 }
@@ -87,9 +89,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         exerciseClient = HealthServices.getClient(this).exerciseClient
-
         setContent {
             GolfTestScreen(exerciseClient, statusTextState)
         }
@@ -97,7 +97,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        // Use lifecycleScope to ensure we use the latest isTrackingState value and do cleanup
         if (isTrackingState.value) {
             lifecycleScope.launch {
                 try {
@@ -117,41 +116,68 @@ class MainActivity : ComponentActivity() {
         status: MutableState<String>
     ) {
         val context = LocalContext.current
-        // Use the single shared MutableState so composable and Activity logic are consistent
         var isTracking by isTrackingState
         val coroutineScope = rememberCoroutineScope()
 
-        // Check permissions
-        var hasPermission by remember {
-            mutableStateOf(
-                ContextCompat.checkSelfPermission(
-                    context,
-                    Manifest.permission.ACTIVITY_RECOGNITION
-                ) == PackageManager.PERMISSION_GRANTED
-            )
+        val permissions = arrayOf(
+            Manifest.permission.ACTIVITY_RECOGNITION,
+            Manifest.permission.BODY_SENSORS,
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+        )
+
+        var hasPermissions by remember {
+            mutableStateOf(permissions.all { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED })
         }
+
         val permissionLauncher = rememberLauncherForActivityResult(
-            ActivityResultContracts.RequestPermission()
-        ) { isGranted ->
-            hasPermission = isGranted
-            if (!isGranted) {
-                status.value = "Permission denied."
+            ActivityResultContracts.RequestMultiplePermissions()
+        ) { permissionsMap ->
+            hasPermissions = permissionsMap.values.all { it }
+            if (!hasPermissions) {
+                status.value = "Permissions denied."
             }
         }
 
-        // STEP 1: Check if the capability is available when the app starts
         LaunchedEffect(key1 = Unit) {
             status.value = "Checking features..."
             try {
+
                 val capabilities = client.getCapabilitiesAsync().await()
                 val golfSupported = capabilities.supportedExerciseTypes.contains(ExerciseType.GOLF)
-                val golfShotEventSupported = capabilities.supportedExerciseEvents.contains(ExerciseEvent.GOLF_SHOT)
 
-                if (golfSupported && golfShotEventSupported) {
-                    status.value = "Golf API: AVAILABLE\nReady to start."
+                /*val allExerciseTypes = capabilities.supportedExerciseTypes
+                // log alle supported exercise event types
+                for (exerciseType in allExerciseTypes) {
+                    val eventTypes = capabilities.getExerciseTypeCapabilities(exerciseType).supportedExerciseEvents
+                    Log.i(tag, "Exercise Type: $exerciseType supports events: $eventTypes")
+                }*/
+
+                //val golfShotEventSupported = golfSupported && capabilities.getExerciseTypeCapabilities(ExerciseType.GOLF).supportedExerciseEvents.contains(ExerciseEventType.GOLF_SHOT_EVENT)
+
+                val golfCapabilities = capabilities.typeToCapabilities[ExerciseType.GOLF]
+                val golfShotEventSupported =
+                    golfCapabilities
+                        ?.supportedExerciseEvents
+                        ?.contains(ExerciseEventType.GOLF_SHOT_EVENT)
+                val golfSwingTypeClassificationSupported =
+                    golfCapabilities
+                        ?.getExerciseEventCapabilityDetails(ExerciseEventType.GOLF_SHOT_EVENT)
+                        ?.isSwingTypeClassificationSupported ?: false
+
+                if (golfSupported && golfShotEventSupported == true) {
+                    status.value = """
+                        Golf API: AVAILABLE
+                        Ready to start.
+                    """.trimIndent()
                     Log.i(tag, "GolfShotEvent is supported on this watch.")
                 } else {
-                    status.value = "Golf API: NOT AVAILABLE\nGolf: $golfSupported\nGolfShotEvent: $golfShotEventSupported"
+                    status.value = """
+                        Golf API: NOT AVAILABLE
+                        Golf: $golfSupported
+                        GolfShotEvent: $golfShotEventSupported
+                        Swing: $golfSwingTypeClassificationSupported
+                    """.trimIndent()
                     Log.w(tag, "GolfShotEvent is NOT supported.")
                 }
             } catch (e: Exception) {
@@ -160,7 +186,6 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // UI
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -171,14 +196,12 @@ class MainActivity : ComponentActivity() {
         ) {
             Text(
                 text = status.value,
-                textAlign = TextAlign.Center,
-                color = MaterialTheme.colors.onBackground
+                textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(16.dp))
             Button(
                 onClick = {
                     if (isTracking) {
-                        // Stop session
                         coroutineScope.launch {
                             try {
                                 client.endExerciseAsync().await()
@@ -190,39 +213,44 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     } else {
-                        // Start session
-                        if (!hasPermission) {
-                            status.value = "Requesting permission..."
-                            permissionLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION)
+                        if (!hasPermissions) {
+                            status.value = "Requesting permissions..."
+                            permissionLauncher.launch(permissions)
                         } else {
                             coroutineScope.launch {
-                                status.value = "Starting golf session...\nSwing the club!"
+                                status.value = """
+                                    Starting golf session...
+                                    Swing the club!
+                                """.trimIndent()
                                 isTracking = true
 
-                                // Query supported data types for GOLF exercise and choose a safe fallback
                                 try {
                                     val capabilities = client.getCapabilitiesAsync().await()
-                                    val supportedDataTypes = capabilities.getSupportedDataTypes(ExerciseType.GOLF)
-
-                                    val dataTypesToRequest = when {
-                                        DataType.HEART_RATE_BPM in supportedDataTypes -> setOf(DataType.HEART_RATE_BPM)
-                                        supportedDataTypes.isNotEmpty() -> setOf(supportedDataTypes.first())
-                                        else -> emptySet()
-                                    }
-
-                                    if (dataTypesToRequest.isEmpty()) {
-                                        status.value = "No supported data types available for golf session."
+                                    if (ExerciseType.GOLF !in capabilities.supportedExerciseTypes) {
+                                        status.value = "Golf is not supported."
                                         isTracking = false
                                         return@launch
                                     }
 
-                                    // Configure the exercise to listen for golf shots with valid data types
-                                    val config = ExerciseConfig.builder(ExerciseType.GOLF)
-                                        .setDataTypes(dataTypesToRequest) // at least one data type guaranteed above
-                                        .build()
+                                    val dataTypes = setOf(DataType.LOCATION)
+                                    val exerciseEvents = setOf(ExerciseEventType.GOLF_SHOT_EVENT)
 
-                                    client.setUpdateCallbackAsync(exerciseCallback).await()
-                                    client.startExerciseAsync(config).await()
+                                    val warmUpConfig = WarmUpConfig(
+                                        exerciseType = ExerciseType.GOLF,
+                                        dataTypes = dataTypes
+                                    )
+
+                                    val exerciseConfig = ExerciseConfig(
+                                        exerciseType = ExerciseType.GOLF,
+                                        dataTypes = dataTypes,
+                                        isAutoPauseAndResumeEnabled = false,
+                                        isGpsEnabled = true,
+                                        exerciseEventTypes = exerciseEvents
+                                    )
+
+                                    client.setUpdateCallback(exerciseCallback)
+                                    client.prepareExerciseAsync(warmUpConfig).await()
+                                    client.startExerciseAsync(exerciseConfig).await()
                                     status.value = "Golf session started. Waiting for shots..."
                                 } catch (e: Exception) {
                                     status.value = "Error starting: ${e.message}"
