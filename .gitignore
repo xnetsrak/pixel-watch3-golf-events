@@ -8,3 +8,14 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Android build
+/app/build/
+/build/
+*.apk
+*.ap_
+*.aab
+*.dex
+/app/release/
+/app/debug/
+.gradle
