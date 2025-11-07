@@ -55,7 +55,9 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         if (isTrackingState.value) {
-            golfExerciseService.stop()
+            lifecycleScope.launch {
+                golfExerciseService.stop()
+            }
         }
     }
 
