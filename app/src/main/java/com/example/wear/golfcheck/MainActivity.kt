@@ -86,13 +86,11 @@ class MainActivity : ComponentActivity() {
         }
 
         LaunchedEffect(Unit) {
-            this.launch {
-                golfExerciseService.golfShotEvents.collect {
-                    it?.let {
-                        val swingType = it.swingType.toString()
-                        Log.i(tag, "GOLF SHOT REGISTERED! Type: $swingType")
-                        status.value = "GOLF SHOT! ($swingType)"
-                    }
+            golfExerciseService.golfShotEvents.collect {
+                it?.let {
+                    val swingType = it.swingType.toString()
+                    Log.i(tag, "GOLF SHOT REGISTERED! Type: $swingType")
+                    status.value = "GOLF SHOT! ($swingType)"
                 }
             }
         }
