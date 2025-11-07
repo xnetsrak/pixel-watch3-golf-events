@@ -13,7 +13,7 @@ abstract class GolfExerciseService {
         _golfShotEventFlow.value = event
     }
 
-    suspend fun markGolfShotEvent(swingType: GolfShotEvent.GolfShotSwingType) {
+    fun markGolfShotEvent(swingType: GolfShotEvent.GolfShotSwingType) {
         val golfShotEvent = GolfShotEvent(swingType)
         onNewGolfShotEvent(golfShotEvent)
     }
