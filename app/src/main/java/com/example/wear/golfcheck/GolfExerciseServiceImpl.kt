@@ -32,9 +32,9 @@ class GolfExerciseServiceImpl(context: Context) : GolfExerciseService(), SensorE
         }
     }
 
-    fun stop() {
+    suspend fun stop() {
         sensorManager.unregisterListener(this)
-        serviceJob.cancel()
+        serviceJob.cancelAndJoin()
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
