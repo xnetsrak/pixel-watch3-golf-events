@@ -55,7 +55,7 @@ class GolfExerciseServiceImpl(context: Context) : GolfExerciseService(), SensorE
         }
     }
 
-    private suspend fun detectSwing(acceleration: FloatArray, gyroscope: FloatArray) {
+    private fun detectSwing(acceleration: FloatArray, gyroscope: FloatArray) {
         val accelMagnitude = Math.sqrt((acceleration[0] * acceleration[0] + acceleration[1] * acceleration[1] + acceleration[2] * acceleration[2]).toDouble())
         val gyroMagnitude = Math.sqrt((gyroscope[0] * gyroscope[0] + gyroscope[1] * gyroscope[1] + gyroscope[2] * gyroscope[2]).toDouble())
 
