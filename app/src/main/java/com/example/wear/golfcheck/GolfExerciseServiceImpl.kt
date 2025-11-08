@@ -32,8 +32,11 @@ class GolfExerciseServiceImpl(context: Context) : GolfExerciseService(), SensorE
         }
     }
 
-    suspend fun stop() {
+    fun stop() {
         sensorManager.unregisterListener(this)
+    }
+
+    suspend fun awaitStop() {
         serviceJob.cancelAndJoin()
     }
 
