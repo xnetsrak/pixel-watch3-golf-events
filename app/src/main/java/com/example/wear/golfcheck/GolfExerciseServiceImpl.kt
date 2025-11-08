@@ -9,7 +9,7 @@ import com.example.wear.golfcheck.data.GolfShotEvent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.cancelAndJoin
 
 class GolfExerciseServiceImpl(context: Context) : GolfExerciseService(), SensorEventListener {
 
@@ -61,15 +61,14 @@ class GolfExerciseServiceImpl(context: Context) : GolfExerciseService(), SensorE
     }
 
     override fun onSensorChanged(event: SensorEvent?) {
-        serviceScope.launch {
         when (event?.sensor?.type) {
             Sensor.TYPE_ACCELEROMETER -> {
                 val accelData: FloatArray
                 val gyroData: FloatArray
                 synchronized(sensorDataLock) {
                     lastAccelerometerData = event.values.clone()
-                    accelData = lastAccelerometerData.clone()
-                    gyroData = lastGyroscopeData.clone()
+                    accelData = lastAccelerometerData!!.clone()
+                    gyroData = lastGyroscopeData?.clone() ?: FloatArray(3)
                 }
                 detectSwing(accelData, gyroData)
             }
@@ -94,10 +93,13 @@ class GolfExerciseServiceImpl(context: Context) : GolfExerciseService(), SensorE
         // This is a very simplistic example. A real implementation would need a much more
         // sophisticated algorithm, likely involving machine learning or more complex signal processing.
         if (accelMagnitude > FULL_SWING_ACCEL_THRESHOLD) { // High acceleration -> Full swing
+            lastShotDetectionTime = currentTime
             markGolfShotEvent(GolfShotEvent.GolfShotSwingType.FULL)
         } else if (accelMagnitude > PARTIAL_SWING_ACCEL_THRESHOLD) { // Medium acceleration -> Partial swing
+            lastShotDetectionTime = currentTime
             markGolfShotEvent(GolfShotEvent.GolfShotSwingType.PARTIAL)
         } else if (gyroMagnitude > PUTT_GYRO_THRESHOLD && accelMagnitude < PUTT_ACCEL_MAX) { // High rotation, low acceleration -> Putt
+            lastShotDetectionTime = currentTime
             markGolfShotEvent(GolfShotEvent.GolfShotSwingType.PUTT)
         } else {
             // Potentially UNKNOWN, but this could be very noisy.
