@@ -26,6 +26,8 @@ class GolfExerciseServiceImpl(context: Context) : GolfExerciseService(), SensorE
     private var lastAccelerometerData: FloatArray? = null
     private var lastGyroscopeData: FloatArray? = null
 
+    private val sensorDataLock = Any()
+  
     fun start(): Boolean {
         val accelRegistered = accelerometer?.let { accel ->
             sensorManager.registerListener(this, accel, SensorManager.SENSOR_DELAY_GAME)
@@ -54,11 +56,20 @@ class GolfExerciseServiceImpl(context: Context) : GolfExerciseService(), SensorE
         serviceScope.launch {
         when (event?.sensor?.type) {
             Sensor.TYPE_ACCELEROMETER -> {
-                lastAccelerometerData = event.values.clone()
-                detectSwing(lastAccelerometerData, lastGyroscopeData)
+                val accelData: FloatArray
+                val gyroData: FloatArray
+                synchronized(sensorDataLock) {
+                    lastAccelerometerData = event.values.clone()
+                    accelData = lastAccelerometerData.clone()
+                    gyroData = lastGyroscopeData.clone()
+                }
+                detectSwing(accelData, gyroData)
             }
             Sensor.TYPE_GYROSCOPE -> {
-                lastGyroscopeData = event.values.clone()
+                synchronized(sensorDataLock) {
+                    lastGyroscopeData = event.values.clone()
+                }
+            }
         }
     }
 
