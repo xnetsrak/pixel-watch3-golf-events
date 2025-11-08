@@ -26,7 +26,6 @@ class GolfExerciseServiceImpl(context: Context) : GolfExerciseService(), SensorE
     private val gyroscope: Sensor? = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
 
     private val serviceJob = Job()
-    private val serviceScope = CoroutineScope(Dispatchers.Default + serviceJob)
     
     // Debouncing: Track last shot detection time to prevent duplicate events
     private var lastShotDetectionTime = 0L
