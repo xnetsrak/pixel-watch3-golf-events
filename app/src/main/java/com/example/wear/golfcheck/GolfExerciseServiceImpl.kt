@@ -20,16 +20,17 @@ class GolfExerciseServiceImpl(context: Context) : GolfExerciseService(), SensorE
     private val serviceJob = Job()
     private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
 
-    private var lastAccelerometerData = FloatArray(3)
-    private var lastGyroscopeData = FloatArray(3)
+    private var lastAccelerometerData: FloatArray? = null
+    private var lastGyroscopeData: FloatArray? = null
 
     fun start() {
-        accelerometer?.also { accel ->
-            sensorManager.registerListener(this, accel, SensorManager.SENSOR_DELAY_GAME)
+        // Check that both sensors are available before starting
+        if (accelerometer == null || gyroscope == null) {
+            throw IllegalStateException("Golf shot detection requires both accelerometer and gyroscope sensors")
         }
-        gyroscope?.also { gyro ->
-            sensorManager.registerListener(this, gyro, SensorManager.SENSOR_DELAY_GAME)
-        }
+        
+        sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME)
+        sensorManager.registerListener(this, gyroscope, SensorManager.SENSOR_DELAY_GAME)
     }
 
     suspend fun stop() {
@@ -46,7 +47,12 @@ class GolfExerciseServiceImpl(context: Context) : GolfExerciseService(), SensorE
             when (event?.sensor?.type) {
                 Sensor.TYPE_ACCELEROMETER -> {
                     lastAccelerometerData = event.values.clone()
-                    detectSwing(lastAccelerometerData, lastGyroscopeData)
+                    // Only detect swing if both sensors have provided data
+                    lastGyroscopeData?.let { gyro ->
+                        lastAccelerometerData?.let { accel ->
+                            detectSwing(accel, gyro)
+                        }
+                    }
                 }
                 Sensor.TYPE_GYROSCOPE -> {
                     lastGyroscopeData = event.values.clone()
