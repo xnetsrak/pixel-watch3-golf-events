@@ -117,9 +117,11 @@ class MainActivity : ComponentActivity() {
             Button(
                 onClick = {
                     if (isTracking) {
-                        golfExerciseService.stop()
-                        status.value = "Session stopped."
-                        isTracking = false
+                        coroutineScope.launch {
+                            golfExerciseService.stop()
+                            status.value = "Session stopped."
+                            isTracking = false
+                        }
                     } else {
                         if (!hasPermissions) {
                             status.value = "Requesting permissions..."
@@ -129,8 +131,12 @@ class MainActivity : ComponentActivity() {
                                 Starting golf session...
                                 Swing the club!
                             """.trimIndent()
-                            golfExerciseService.start()
-                            isTracking = true
+                            val sensorsAvailable = golfExerciseService.start()
+                            if (sensorsAvailable) {
+                                isTracking = true
+                            } else {
+                                status.value = "Error: Accelerometer or gyroscope unavailable on this device."
+                            }
                         }
                     }
                 }

@@ -18,23 +18,28 @@ class GolfExerciseServiceImpl(context: Context) : GolfExerciseService(), SensorE
     private val gyroscope: Sensor? = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
 
     private val serviceJob = Job()
-    private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
+    private val serviceScope = CoroutineScope(Dispatchers.Default + serviceJob)
 
     private var lastAccelerometerData: FloatArray? = null
     private var lastGyroscopeData: FloatArray? = null
 
-    fun start() {
-        // Check that both sensors are available before starting
-        if (accelerometer == null || gyroscope == null) {
-            throw IllegalStateException("Golf shot detection requires both accelerometer and gyroscope sensors")
-        }
+    fun start(): Boolean {
+        val accelRegistered = accelerometer?.let { accel ->
+            sensorManager.registerListener(this, accel, SensorManager.SENSOR_DELAY_GAME)
+        } ?: false
         
-        sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME)
-        sensorManager.registerListener(this, gyroscope, SensorManager.SENSOR_DELAY_GAME)
+        val gyroRegistered = gyroscope?.let { gyro ->
+            sensorManager.registerListener(this, gyro, SensorManager.SENSOR_DELAY_GAME)
+        } ?: false
+        
+        return accelRegistered && gyroRegistered
     }
 
-    suspend fun stop() {
+    fun stop() {
         sensorManager.unregisterListener(this)
+    }
+
+    suspend fun awaitStop() {
         serviceJob.cancelAndJoin()
     }
 
@@ -44,20 +49,13 @@ class GolfExerciseServiceImpl(context: Context) : GolfExerciseService(), SensorE
 
     override fun onSensorChanged(event: SensorEvent?) {
         serviceScope.launch {
-            when (event?.sensor?.type) {
-                Sensor.TYPE_ACCELEROMETER -> {
-                    lastAccelerometerData = event.values.clone()
-                    // Only detect swing if both sensors have provided data
-                    lastGyroscopeData?.let { gyro ->
-                        lastAccelerometerData?.let { accel ->
-                            detectSwing(accel, gyro)
-                        }
-                    }
-                }
-                Sensor.TYPE_GYROSCOPE -> {
-                    lastGyroscopeData = event.values.clone()
-                }
+        when (event?.sensor?.type) {
+            Sensor.TYPE_ACCELEROMETER -> {
+                lastAccelerometerData = event.values.clone()
+                detectSwing(lastAccelerometerData, lastGyroscopeData)
             }
+            Sensor.TYPE_GYROSCOPE -> {
+                lastGyroscopeData = event.values.clone()
         }
     }
 
