@@ -19,21 +19,23 @@ class GolfExerciseServiceImpl(context: Context) : GolfExerciseService(), SensorE
 
     private val serviceJob = Job()
     private val serviceScope = CoroutineScope(Dispatchers.Default + serviceJob)
-
-    private var lastAccelerometerData = FloatArray(3)
-    private var lastGyroscopeData = FloatArray(3)
     
     // Debouncing: Track last shot detection time to prevent duplicate events
     private var lastShotDetectionTime = 0L
     private val shotDetectionCooldownMs = 1500L // 1.5 seconds cooldown between shots
+    private var lastAccelerometerData: FloatArray? = null
+    private var lastGyroscopeData: FloatArray? = null
 
-    fun start() {
-        accelerometer?.also { accel ->
+    fun start(): Boolean {
+        val accelRegistered = accelerometer?.let { accel ->
             sensorManager.registerListener(this, accel, SensorManager.SENSOR_DELAY_GAME)
-        }
-        gyroscope?.also { gyro ->
+        } ?: false
+        
+        val gyroRegistered = gyroscope?.let { gyro ->
             sensorManager.registerListener(this, gyro, SensorManager.SENSOR_DELAY_GAME)
-        }
+        } ?: false
+        
+        return accelRegistered && gyroRegistered
     }
 
     fun stop() {
@@ -49,6 +51,7 @@ class GolfExerciseServiceImpl(context: Context) : GolfExerciseService(), SensorE
     }
 
     override fun onSensorChanged(event: SensorEvent?) {
+        serviceScope.launch {
         when (event?.sensor?.type) {
             Sensor.TYPE_ACCELEROMETER -> {
                 lastAccelerometerData = event.values.clone()
@@ -56,7 +59,6 @@ class GolfExerciseServiceImpl(context: Context) : GolfExerciseService(), SensorE
             }
             Sensor.TYPE_GYROSCOPE -> {
                 lastGyroscopeData = event.values.clone()
-            }
         }
     }
 
