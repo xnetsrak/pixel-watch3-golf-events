@@ -136,6 +136,7 @@ class MainActivity : ComponentActivity() {
                                 isTracking = true
                             } else {
                                 status.value = "Error: Accelerometer or gyroscope unavailable on this device."
+                                isTracking = false
                             }
                         }
                     }
