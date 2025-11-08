@@ -13,6 +13,14 @@ import kotlinx.coroutines.launch
 
 class GolfExerciseServiceImpl(context: Context) : GolfExerciseService(), SensorEventListener {
 
+    companion object {
+        // Threshold values for golf shot detection
+        private const val FULL_SWING_ACCEL_THRESHOLD = 25.0
+        private const val PARTIAL_SWING_ACCEL_THRESHOLD = 15.0
+        private const val PUTT_GYRO_THRESHOLD = 4.0
+        private const val PUTT_ACCEL_MAX = 10.0
+    }
+
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
     private val accelerometer: Sensor? = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
     private val gyroscope: Sensor? = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
@@ -62,11 +70,11 @@ class GolfExerciseServiceImpl(context: Context) : GolfExerciseService(), SensorE
 
         // This is a very simplistic example. A real implementation would need a much more
         // sophisticated algorithm, likely involving machine learning or more complex signal processing.
-        if (accelMagnitude > 25) { // High acceleration -> Full swing
+        if (accelMagnitude > FULL_SWING_ACCEL_THRESHOLD) { // High acceleration -> Full swing
             markGolfShotEvent(GolfShotEvent.GolfShotSwingType.FULL)
-        } else if (accelMagnitude > 15) { // Medium acceleration -> Partial swing
+        } else if (accelMagnitude > PARTIAL_SWING_ACCEL_THRESHOLD) { // Medium acceleration -> Partial swing
             markGolfShotEvent(GolfShotEvent.GolfShotSwingType.PARTIAL)
-        } else if (gyroMagnitude > 4 && accelMagnitude < 10) { // High rotation, low acceleration -> Putt
+        } else if (gyroMagnitude > PUTT_GYRO_THRESHOLD && accelMagnitude < PUTT_ACCEL_MAX) { // High rotation, low acceleration -> Putt
             markGolfShotEvent(GolfShotEvent.GolfShotSwingType.PUTT)
         } else {
             // Potentially UNKNOWN, but this could be very noisy.
