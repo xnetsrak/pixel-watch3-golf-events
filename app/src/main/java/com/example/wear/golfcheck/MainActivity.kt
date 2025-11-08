@@ -117,9 +117,11 @@ class MainActivity : ComponentActivity() {
             Button(
                 onClick = {
                     if (isTracking) {
-                        golfExerciseService.stop()
-                        status.value = "Session stopped."
-                        isTracking = false
+                        coroutineScope.launch {
+                            golfExerciseService.stop()
+                            status.value = "Session stopped."
+                            isTracking = false
+                        }
                     } else {
                         if (!hasPermissions) {
                             status.value = "Requesting permissions..."
