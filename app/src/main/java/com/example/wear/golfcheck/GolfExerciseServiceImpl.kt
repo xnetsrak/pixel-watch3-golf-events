@@ -10,6 +10,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
+import kotlin.math.sqrt
 
 class GolfExerciseServiceImpl(context: Context) : GolfExerciseService(), SensorEventListener {
 
@@ -35,6 +36,15 @@ class GolfExerciseServiceImpl(context: Context) : GolfExerciseService(), SensorE
 
     private val sensorDataLock = Any()
   
+    /**
+     * Calculate the magnitude of a 3D vector.
+     * @param values Array containing x, y, z components
+     * @return Magnitude of the vector
+     */
+    private fun calculateMagnitude(values: FloatArray): Double {
+        return sqrt((values[0] * values[0] + values[1] * values[1] + values[2] * values[2]).toDouble())
+    }
+
     fun start(): Boolean {
         val accelRegistered = accelerometer?.let { accel ->
             sensorManager.registerListener(this, accel, SensorManager.SENSOR_DELAY_GAME)
@@ -86,8 +96,8 @@ class GolfExerciseServiceImpl(context: Context) : GolfExerciseService(), SensorE
             return // Still in cooldown, ignore this event
         }
         
-        val accelMagnitude = Math.sqrt((acceleration[0] * acceleration[0] + acceleration[1] * acceleration[1] + acceleration[2] * acceleration[2]).toDouble())
-        val gyroMagnitude = Math.sqrt((gyroscope[0] * gyroscope[0] + gyroscope[1] * gyroscope[1] + gyroscope[2] * gyroscope[2]).toDouble())
+        val accelMagnitude = calculateMagnitude(acceleration)
+        val gyroMagnitude = calculateMagnitude(gyroscope)
 
         // This is a very simplistic example. A real implementation would need a much more
         // sophisticated algorithm, likely involving machine learning or more complex signal processing.
