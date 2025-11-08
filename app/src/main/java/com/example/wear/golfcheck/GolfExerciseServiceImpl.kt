@@ -18,7 +18,7 @@ class GolfExerciseServiceImpl(context: Context) : GolfExerciseService(), SensorE
     private val gyroscope: Sensor? = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
 
     private val serviceJob = Job()
-    private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
+    private val serviceScope = CoroutineScope(Dispatchers.Default + serviceJob)
 
     private var lastAccelerometerData = FloatArray(3)
     private var lastGyroscopeData = FloatArray(3)
