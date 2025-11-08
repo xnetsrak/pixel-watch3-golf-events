@@ -27,17 +27,25 @@ class GolfExerciseServiceImpl(context: Context) : GolfExerciseService(), SensorE
 
     private val serviceJob = Job()
     private val serviceScope = CoroutineScope(Dispatchers.Default + serviceJob)
+    
+    // Debouncing: Track last shot detection time to prevent duplicate events
+    private var lastShotDetectionTime = 0L
+    private val shotDetectionCooldownMs = 1500L // 1.5 seconds cooldown between shots
+    private var lastAccelerometerData: FloatArray? = null
+    private var lastGyroscopeData: FloatArray? = null
 
-    private var lastAccelerometerData = FloatArray(3)
-    private var lastGyroscopeData = FloatArray(3)
-
-    fun start() {
-        accelerometer?.also { accel ->
+    private val sensorDataLock = Any()
+  
+    fun start(): Boolean {
+        val accelRegistered = accelerometer?.let { accel ->
             sensorManager.registerListener(this, accel, SensorManager.SENSOR_DELAY_GAME)
-        }
-        gyroscope?.also { gyro ->
+        } ?: false
+        
+        val gyroRegistered = gyroscope?.let { gyro ->
             sensorManager.registerListener(this, gyro, SensorManager.SENSOR_DELAY_GAME)
-        }
+        } ?: false
+        
+        return accelRegistered && gyroRegistered
     }
 
     fun stop() {
@@ -53,18 +61,33 @@ class GolfExerciseServiceImpl(context: Context) : GolfExerciseService(), SensorE
     }
 
     override fun onSensorChanged(event: SensorEvent?) {
+        serviceScope.launch {
         when (event?.sensor?.type) {
             Sensor.TYPE_ACCELEROMETER -> {
-                lastAccelerometerData = event.values.clone()
-                detectSwing(lastAccelerometerData, lastGyroscopeData)
+                val accelData: FloatArray
+                val gyroData: FloatArray
+                synchronized(sensorDataLock) {
+                    lastAccelerometerData = event.values.clone()
+                    accelData = lastAccelerometerData.clone()
+                    gyroData = lastGyroscopeData.clone()
+                }
+                detectSwing(accelData, gyroData)
             }
             Sensor.TYPE_GYROSCOPE -> {
-                lastGyroscopeData = event.values.clone()
+                synchronized(sensorDataLock) {
+                    lastGyroscopeData = event.values.clone()
+                }
             }
         }
     }
 
     private fun detectSwing(acceleration: FloatArray, gyroscope: FloatArray) {
+        // Check if we're still in cooldown period from last shot detection
+        val currentTime = System.currentTimeMillis()
+        if (currentTime - lastShotDetectionTime < shotDetectionCooldownMs) {
+            return // Still in cooldown, ignore this event
+        }
+        
         val accelMagnitude = Math.sqrt((acceleration[0] * acceleration[0] + acceleration[1] * acceleration[1] + acceleration[2] * acceleration[2]).toDouble())
         val gyroMagnitude = Math.sqrt((gyroscope[0] * gyroscope[0] + gyroscope[1] * gyroscope[1] + gyroscope[2] * gyroscope[2]).toDouble())
 
