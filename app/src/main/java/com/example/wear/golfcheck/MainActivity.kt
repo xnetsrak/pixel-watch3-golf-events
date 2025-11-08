@@ -88,6 +88,7 @@ class MainActivity : ComponentActivity() {
         }
 
         LaunchedEffect(Unit) {
+            status.value = "Ready to start."
             golfExerciseService.golfShotEvents.collect {
                 it?.let {
                     val swingType = it.swingType.toString()
@@ -95,10 +96,6 @@ class MainActivity : ComponentActivity() {
                     status.value = "GOLF SHOT! ($swingType)"
                 }
             }
-        }
-
-        LaunchedEffect(key1 = Unit) {
-            status.value = "Ready to start."
         }
 
         Column(
