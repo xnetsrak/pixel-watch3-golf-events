@@ -19,7 +19,10 @@ class GolfExerciseServiceImpl(context: Context) : GolfExerciseService(), SensorE
 
     private val serviceJob = Job()
     private val serviceScope = CoroutineScope(Dispatchers.Default + serviceJob)
-
+    
+    // Debouncing: Track last shot detection time to prevent duplicate events
+    private var lastShotDetectionTime = 0L
+    private val shotDetectionCooldownMs = 1500L // 1.5 seconds cooldown between shots
     private var lastAccelerometerData: FloatArray? = null
     private var lastGyroscopeData: FloatArray? = null
 
@@ -60,16 +63,25 @@ class GolfExerciseServiceImpl(context: Context) : GolfExerciseService(), SensorE
     }
 
     private fun detectSwing(acceleration: FloatArray, gyroscope: FloatArray) {
+        // Check if we're still in cooldown period from last shot detection
+        val currentTime = System.currentTimeMillis()
+        if (currentTime - lastShotDetectionTime < shotDetectionCooldownMs) {
+            return // Still in cooldown, ignore this event
+        }
+        
         val accelMagnitude = Math.sqrt((acceleration[0] * acceleration[0] + acceleration[1] * acceleration[1] + acceleration[2] * acceleration[2]).toDouble())
         val gyroMagnitude = Math.sqrt((gyroscope[0] * gyroscope[0] + gyroscope[1] * gyroscope[1] + gyroscope[2] * gyroscope[2]).toDouble())
 
         // This is a very simplistic example. A real implementation would need a much more
         // sophisticated algorithm, likely involving machine learning or more complex signal processing.
         if (accelMagnitude > 25) { // High acceleration -> Full swing
+            lastShotDetectionTime = currentTime
             markGolfShotEvent(GolfShotEvent.GolfShotSwingType.FULL)
         } else if (accelMagnitude > 15) { // Medium acceleration -> Partial swing
+            lastShotDetectionTime = currentTime
             markGolfShotEvent(GolfShotEvent.GolfShotSwingType.PARTIAL)
         } else if (gyroMagnitude > 4 && accelMagnitude < 10) { // High rotation, low acceleration -> Putt
+            lastShotDetectionTime = currentTime
             markGolfShotEvent(GolfShotEvent.GolfShotSwingType.PUTT)
         } else {
             // Potentially UNKNOWN, but this could be very noisy.
