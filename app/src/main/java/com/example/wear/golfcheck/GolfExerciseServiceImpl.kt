@@ -42,15 +42,13 @@ class GolfExerciseServiceImpl(context: Context) : GolfExerciseService(), SensorE
     }
 
     override fun onSensorChanged(event: SensorEvent?) {
-        serviceScope.launch {
-            when (event?.sensor?.type) {
-                Sensor.TYPE_ACCELEROMETER -> {
-                    lastAccelerometerData = event.values.clone()
-                    detectSwing(lastAccelerometerData, lastGyroscopeData)
-                }
-                Sensor.TYPE_GYROSCOPE -> {
-                    lastGyroscopeData = event.values.clone()
-                }
+        when (event?.sensor?.type) {
+            Sensor.TYPE_ACCELEROMETER -> {
+                lastAccelerometerData = event.values.clone()
+                detectSwing(lastAccelerometerData, lastGyroscopeData)
+            }
+            Sensor.TYPE_GYROSCOPE -> {
+                lastGyroscopeData = event.values.clone()
             }
         }
     }
