@@ -23,13 +23,16 @@ class GolfExerciseServiceImpl(context: Context) : GolfExerciseService(), SensorE
     private var lastAccelerometerData = FloatArray(3)
     private var lastGyroscopeData = FloatArray(3)
 
-    fun start() {
-        accelerometer?.also { accel ->
+    fun start(): Boolean {
+        val accelRegistered = accelerometer?.let { accel ->
             sensorManager.registerListener(this, accel, SensorManager.SENSOR_DELAY_GAME)
-        }
-        gyroscope?.also { gyro ->
+        } ?: false
+        
+        val gyroRegistered = gyroscope?.let { gyro ->
             sensorManager.registerListener(this, gyro, SensorManager.SENSOR_DELAY_GAME)
-        }
+        } ?: false
+        
+        return accelRegistered && gyroRegistered
     }
 
     suspend fun stop() {

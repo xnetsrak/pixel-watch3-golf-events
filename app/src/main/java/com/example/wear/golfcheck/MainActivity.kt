@@ -129,8 +129,12 @@ class MainActivity : ComponentActivity() {
                                 Starting golf session...
                                 Swing the club!
                             """.trimIndent()
-                            golfExerciseService.start()
-                            isTracking = true
+                            val sensorsAvailable = golfExerciseService.start()
+                            if (sensorsAvailable) {
+                                isTracking = true
+                            } else {
+                                status.value = "Error: Accelerometer or gyroscope unavailable on this device."
+                            }
                         }
                     }
                 }
