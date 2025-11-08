@@ -20,8 +20,8 @@ class GolfExerciseServiceImpl(context: Context) : GolfExerciseService(), SensorE
     private val serviceJob = Job()
     private val serviceScope = CoroutineScope(Dispatchers.Default + serviceJob)
 
-    private var lastAccelerometerData = FloatArray(3)
-    private var lastGyroscopeData = FloatArray(3)
+    private var lastAccelerometerData: FloatArray? = null
+    private var lastGyroscopeData: FloatArray? = null
 
     fun start(): Boolean {
         val accelRegistered = accelerometer?.let { accel ->
@@ -48,6 +48,7 @@ class GolfExerciseServiceImpl(context: Context) : GolfExerciseService(), SensorE
     }
 
     override fun onSensorChanged(event: SensorEvent?) {
+        serviceScope.launch {
         when (event?.sensor?.type) {
             Sensor.TYPE_ACCELEROMETER -> {
                 lastAccelerometerData = event.values.clone()
@@ -55,7 +56,6 @@ class GolfExerciseServiceImpl(context: Context) : GolfExerciseService(), SensorE
             }
             Sensor.TYPE_GYROSCOPE -> {
                 lastGyroscopeData = event.values.clone()
-            }
         }
     }
 
