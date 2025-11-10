@@ -49,6 +49,7 @@ class GolfExerciseServiceImpl : Service(), SensorEventListener {
     private val gyroscope: Sensor? by lazy { sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE) }
 
     private val serviceJob = Job()
+    private val serviceScope = CoroutineScope(Dispatchers.Default + serviceJob)
     
     // Debouncing: Track last shot detection time to prevent duplicate events
     private var lastShotDetectionTime = 0L
@@ -111,6 +112,7 @@ class GolfExerciseServiceImpl : Service(), SensorEventListener {
 
     private fun stop() {
         sensorManager.unregisterListener(this)
+        serviceJob.cancel()
     }
 
     suspend fun awaitStop() {
