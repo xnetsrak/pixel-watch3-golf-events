@@ -168,6 +168,9 @@ class GolfExerciseServiceImpl : Service(), SensorEventListener {
     private fun markGolfShotEvent(swingType: GolfShotEvent.GolfShotSwingType) {
         val golfShotEvent = GolfShotEvent(swingType)
         _golfShotEventFlow.value = golfShotEvent
-        vibrationHelper.vibrate(500)
+        // Check for vibration support before vibrating
+        if (vibrationHelper.hasVibrator()) {
+            vibrationHelper.vibrate(500)
+        }
     }
 }
