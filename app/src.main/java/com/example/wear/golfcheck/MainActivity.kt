@@ -16,9 +16,6 @@ import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
@@ -34,6 +31,13 @@ class MainActivity : ComponentActivity() {
             val binder = service as GolfExerciseServiceImpl.LocalBinder
             golfService = binder.getService()
             isBound = true
+            setContent {
+                MainScreen(
+                    golfShotEventFlow = golfService?.golfShotEvents,
+                    onStartClick = { startGolfService() },
+                    onStopClick = { stopGolfService() }
+                )
+            }
         }
 
         override fun onServiceDisconnected(arg0: ComponentName) {
@@ -44,9 +48,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            var service by remember { mutableStateOf(golfService) }
             MainScreen(
-                golfShotEventFlow = service?.golfShotEvents,
+                golfShotEventFlow = null,
                 onStartClick = { startGolfService() },
                 onStopClick = { stopGolfService() }
             )
@@ -85,7 +88,7 @@ fun MainScreen(
     onStartClick: () -> Unit,
     onStopClick: () -> Unit
 ) {
-    val golfShotEvent by golfShotEventFlow?.collectAsState() ?: remember { mutableStateOf(null) }
+    val golfShotEvent by golfShotEventFlow?.collectAsState() ?: return
 
     Column(
         modifier = Modifier.fillMaxSize(),
