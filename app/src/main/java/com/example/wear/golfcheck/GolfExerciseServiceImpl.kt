@@ -1,18 +1,38 @@
 package com.example.wear.golfcheck
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.Service
 import android.content.Context
+import android.content.Intent
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.os.Binder
+import android.os.IBinder
 import com.example.wear.golfcheck.data.GolfShotEvent
+import com.example.wear.golfcheck.utils.VibrationHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlin.math.sqrt
 
-class GolfExerciseServiceImpl(context: Context) : GolfExerciseService(), SensorEventListener {
+class GolfExerciseServiceImpl : Service(), SensorEventListener {
+
+    private lateinit var vibrationHelper: VibrationHelper
+    private val binder = LocalBinder()
+
+    inner class LocalBinder : Binder() {
+        fun getService(): GolfExerciseServiceImpl = this@GolfExerciseServiceImpl
+    }
+
+    private val _golfShotEventFlow = MutableStateFlow<GolfShotEvent?>(null)
+    val golfShotEvents: StateFlow<GolfShotEvent?> = _golfShotEventFlow
 
     companion object {
         // Threshold values for golf shot detection
@@ -20,11 +40,13 @@ class GolfExerciseServiceImpl(context: Context) : GolfExerciseService(), SensorE
         private const val PARTIAL_SWING_ACCEL_THRESHOLD = 15.0
         private const val PUTT_GYRO_THRESHOLD = 4.0
         private const val PUTT_ACCEL_MAX = 10.0
+        private const val NOTIFICATION_ID = 1
+        private const val NOTIFICATION_CHANNEL_ID = "GolfExerciseServiceChannel"
     }
 
-    private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-    private val accelerometer: Sensor? = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-    private val gyroscope: Sensor? = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
+    private val sensorManager by lazy { getSystemService(Context.SENSOR_SERVICE) as SensorManager }
+    private val accelerometer: Sensor? by lazy { sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) }
+    private val gyroscope: Sensor? by lazy { sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE) }
 
     private val serviceJob = Job()
     
@@ -36,6 +58,43 @@ class GolfExerciseServiceImpl(context: Context) : GolfExerciseService(), SensorE
 
     private val sensorDataLock = Any()
   
+    override fun onCreate() {
+        super.onCreate()
+        vibrationHelper = VibrationHelper(this)
+        val notification = createNotification()
+        startForeground(NOTIFICATION_ID, notification)
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        start()
+        return START_STICKY
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        stop()
+    }
+
+    override fun onBind(intent: Intent): IBinder? {
+        return binder
+    }
+
+    private fun createNotification(): Notification {
+        val channel = NotificationChannel(
+            NOTIFICATION_CHANNEL_ID,
+            "Golf Exercise Service",
+            NotificationManager.IMPORTANCE_DEFAULT
+        )
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.createNotificationChannel(channel)
+
+        return Notification.Builder(this, NOTIFICATION_CHANNEL_ID)
+            .setContentTitle("Golf Swing Detection Active")
+            .setContentText("Detecting your swings in the background.")
+            .setSmallIcon(android.R.drawable.ic_menu_mylocation)
+            .build()
+    }
+
     /**
      * Calculate the magnitude of a 3D vector.
      * @param values Array containing x, y, z components
@@ -45,19 +104,12 @@ class GolfExerciseServiceImpl(context: Context) : GolfExerciseService(), SensorE
         return sqrt((values[0] * values[0] + values[1] * values[1] + values[2] * values[2]).toDouble())
     }
 
-    fun start(): Boolean {
-        val accelRegistered = accelerometer?.let { accel ->
-            sensorManager.registerListener(this, accel, SensorManager.SENSOR_DELAY_GAME)
-        } ?: false
-        
-        val gyroRegistered = gyroscope?.let { gyro ->
-            sensorManager.registerListener(this, gyro, SensorManager.SENSOR_DELAY_GAME)
-        } ?: false
-        
-        return accelRegistered && gyroRegistered
+    private fun start() {
+        accelerometer?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) }
+        gyroscope?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) }
     }
 
-    fun stop() {
+    private fun stop() {
         sensorManager.unregisterListener(this)
     }
 
@@ -110,9 +162,12 @@ class GolfExerciseServiceImpl(context: Context) : GolfExerciseService(), SensorE
         } else if (gyroMagnitude > PUTT_GYRO_THRESHOLD && accelMagnitude < PUTT_ACCEL_MAX) { // High rotation, low acceleration -> Putt
             lastShotDetectionTime = currentTime
             markGolfShotEvent(GolfShotEvent.GolfShotSwingType.PUTT)
-        } else {
-            // Potentially UNKNOWN, but this could be very noisy.
-            // For this example, we'll avoid marking UNKNOWN to prevent spamming events.
         }
+    }
+
+    private fun markGolfShotEvent(swingType: GolfShotEvent.GolfShotSwingType) {
+        val golfShotEvent = GolfShotEvent(swingType)
+        _golfShotEventFlow.value = golfShotEvent
+        vibrationHelper.vibrate(500)
     }
 }
