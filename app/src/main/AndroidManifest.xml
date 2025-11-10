@@ -40,6 +40,6 @@
         <service
             android:name=".GolfExerciseServiceImpl"
             android:exported="false"
-            android:foregroundServiceType="shortService" />
+            android:foregroundServiceType="location" />
     </application>
 </manifest>
