@@ -48,7 +48,6 @@ class GolfExerciseServiceImpl : Service(), SensorEventListener {
     private val accelerometer: Sensor? by lazy { sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) }
     private val gyroscope: Sensor? by lazy { sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE) }
 
-    private val serviceJob = Job()
     
     // Debouncing: Track last shot detection time to prevent duplicate events
     private var lastShotDetectionTime = 0L
